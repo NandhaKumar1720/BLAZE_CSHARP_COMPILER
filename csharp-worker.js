@@ -19,29 +19,31 @@ function cleanupFiles(...files) {
 (async () => {
     const { code, input } = workerData;
 
-    // Paths for temporary C# script
+    // Define paths for temporary C# files
     const tmpDir = os.tmpdir();
-    const sourceFile = path.join(tmpDir, `temp_${Date.now()}.cs`);
-    const outputFile = path.join(tmpDir, `temp_${Date.now()}.exe`);
+    const sourceFile = path.join(tmpDir, `main_${Date.now()}.cs`);
+    const outputDir = path.join(tmpDir, `output_${Date.now()}`);
+    const outputFile = path.join(outputDir, "main.dll");
 
     try {
         // Write the C# code to the source file
         fs.writeFileSync(sourceFile, code);
 
         // Compile the C# code using `dotnet` CLI
-        const compileCommand = `dotnet build -o ${tmpDir} ${sourceFile}`;
+        fs.mkdirSync(outputDir); // Create the output directory
+        const compileCommand = `dotnet build -o ${outputDir} ${sourceFile}`;
         execSync(compileCommand);
 
         // Execute the compiled program
-        const runCommand = `dotnet script ${sourceFile}`;
+        const runCommand = `dotnet ${outputFile}`;
         let output = execSync(runCommand, {
             input, // Pass input to the C# program
             encoding: "utf-8", // Ensures we get the output as a string
         });
 
-
         // Clean up temporary files after execution
-        cleanupFiles(sourceFile, outputFile);
+        cleanupFiles(sourceFile);
+        fs.rmdirSync(outputDir, { recursive: true });
 
         // Send the output back to the main thread
         parentPort.postMessage({
@@ -49,7 +51,8 @@ function cleanupFiles(...files) {
         });
     } catch (err) {
         // Clean up files and send server error if anything goes wrong
-        cleanupFiles(sourceFile, outputFile);
+        cleanupFiles(sourceFile);
+        fs.rmdirSync(outputDir, { recursive: true });
         return parentPort.postMessage({
             error: { fullError: `Server error: ${err.message}` },
         });
