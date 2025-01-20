@@ -33,11 +33,12 @@ function cleanupFiles(...files) {
         execSync(compileCommand);
 
         // Execute the compiled program
-        const runCommand = `dotnet ${outputFile}`;
+        const runCommand = `dotnet script ${sourceFile}`;
         let output = execSync(runCommand, {
             input, // Pass input to the C# program
             encoding: "utf-8", // Ensures we get the output as a string
         });
+
 
         // Clean up temporary files after execution
         cleanupFiles(sourceFile, outputFile);
