@@ -1,60 +1,58 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const { Worker } = require("worker_threads");
-const cors = require("cors");
-const http = require("http");
+const { parentPort, workerData } = require("worker_threads");
+const { execSync } = require("child_process");
+const os = require("os");
+const fs = require("fs");
+const path = require("path");
 
-const app = express();
-const port = 3000;
-
-// Enable CORS
-app.use(cors());
-
-// Middleware for JSON parsing
-app.use(bodyParser.json());
-
-// POST endpoint for C# code execution
-app.post("/", (req, res) => {
-    const { code, input } = req.body;
-
-    // Validate input
-    if (!code) {
-        return res.status(400).json({ error: { fullError: "Error: No code provided!" } });
-    }
-
-    // Create a worker thread for C# code execution
-    const worker = new Worker("./csharp-worker.js", {
-        workerData: { code, input },
-    });
-
-    worker.on("message", (result) => {
-        res.json(result);
-    });
-
-    worker.on("error", (err) => {
-        res.status(500).json({ error: { fullError: `Worker error: ${err.message}` } });
-    });
-
-    worker.on("exit", (code) => {
-        if (code !== 0) {
-            console.error(`Worker stopped with exit code ${code}`);
+// Utility function to clean up temporary files
+function cleanupFiles(...files) {
+    files.forEach((file) => {
+        try {
+            if (fs.existsSync(file)) {
+                fs.unlinkSync(file);
+            }
+        } catch (err) {
+            console.error(`Failed to clean up file: ${file}, error: ${err.message}`);
         }
     });
-});
+}
 
-// Health check endpoint
-app.get("/health", (req, res) => {
-    res.status(200).json({ status: "Server is healthy!" });
-});
+// Worker logic
+(async () => {
+    const { code, input } = workerData;
 
-// Self-pinging mechanism to keep the server alive
-setInterval(() => {
-    http.get(`http://localhost:${port}/health`, (res) => {
-        console.log("Health check pinged!");
-    });
-}, 1 * 60 * 1000); // Ping every minute
+    // Define paths for temporary source file and output file
+    const tmpDir = os.tmpdir();
+    const uniqueId = Date.now();
+    const sourceFile = path.join(tmpDir, `Program_${uniqueId}.cs`);
+    const exeFile = path.join(tmpDir, `Program_${uniqueId}.exe`);
 
-// Start the server
-app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
-});
+    try {
+        // Write the C# source code to a temporary file
+        fs.writeFileSync(sourceFile, code, { encoding: "utf-8" });
+
+        // Compile the C# code using the `csc` compiler
+        const compileCommand = `csc /out:${exeFile} ${sourceFile}`;
+        execSync(compileCommand, { stdio: "inherit" });
+
+        // Execute the compiled program and pass the input
+        const runCommand = exeFile;
+        const output = execSync(runCommand, {
+            input,
+            encoding: "utf-8",
+        });
+
+        // Send the output back to the main thread
+        parentPort.postMessage({
+            output: output || "No output received!",
+        });
+    } catch (err) {
+        // Send the error back to the main thread
+        parentPort.postMessage({
+            error: { fullError: `Server error: ${err.message}` },
+        });
+    } finally {
+        // Clean up temporary files
+        cleanupFiles(sourceFile, exeFile);
+    }
+})();
