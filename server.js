@@ -4,12 +4,16 @@ const os = require("os");
 const fs = require("fs");
 const path = require("path");
 
-// Utility function to clean up temporary files
+// Utility function to clean up temporary files and directories
 function cleanupFiles(...files) {
     files.forEach((file) => {
         try {
             if (fs.existsSync(file)) {
-                fs.unlinkSync(file);
+                if (fs.lstatSync(file).isDirectory()) {
+                    fs.rmSync(file, { recursive: true, force: true });
+                } else {
+                    fs.unlinkSync(file);
+                }
             }
         } catch (err) {
             console.error(`Failed to clean up file: ${file}, error: ${err.message}`);
@@ -21,22 +25,41 @@ function cleanupFiles(...files) {
 (async () => {
     const { code, input } = workerData;
 
-    // Define paths for temporary source file and output file
+    // Define paths for temporary project
     const tmpDir = os.tmpdir();
     const uniqueId = Date.now();
-    const sourceFile = path.join(tmpDir, `Program_${uniqueId}.cs`);
-    const exeFile = path.join(tmpDir, `Program_${uniqueId}.exe`);
+    const projectDir = path.join(tmpDir, `project_${uniqueId}`);
+    const sourceFile = path.join(projectDir, "Program.cs");
+    const projectFile = path.join(projectDir, "project.csproj");
 
     try {
-        // Write the C# source code to a temporary file
-        fs.writeFileSync(sourceFile, code, { encoding: "utf-8" });
+        // Create project directory
+        fs.mkdirSync(projectDir);
 
-        // Compile the C# code using the `csc` compiler
-        const compileCommand = `csc /out:${exeFile} ${sourceFile}`;
-        execSync(compileCommand, { stdio: "inherit" });
+        // Write the C# source code to the Program.cs file
+        fs.writeFileSync(
+            sourceFile,
+            code,
+            { encoding: "utf-8" }
+        );
 
-        // Execute the compiled program and pass the input
-        const runCommand = exeFile;
+        // Write a minimal project file
+        const projectContent = `
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+        `;
+        fs.writeFileSync(projectFile, projectContent, { encoding: "utf-8" });
+
+        // Build the project using `dotnet`
+        const buildCommand = `dotnet build "${projectDir}" -o "${projectDir}/bin"`;
+        execSync(buildCommand, { stdio: "inherit" });
+
+        // Execute the compiled program
+        const runCommand = `dotnet "${projectDir}/bin/project.dll"`;
         const output = execSync(runCommand, {
             input,
             encoding: "utf-8",
@@ -52,7 +75,7 @@ function cleanupFiles(...files) {
             error: { fullError: `Server error: ${err.message}` },
         });
     } finally {
-        // Clean up temporary files
-        cleanupFiles(sourceFile, exeFile);
+        // Clean up temporary files and directories
+        cleanupFiles(projectDir);
     }
 })();
