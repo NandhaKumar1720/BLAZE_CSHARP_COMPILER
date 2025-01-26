@@ -8,9 +8,15 @@ const path = require("path");
 function cleanupFiles(...files) {
     files.forEach((file) => {
         try {
-            fs.unlinkSync(file);
+            if (fs.existsSync(file)) {
+                if (fs.lstatSync(file).isDirectory()) {
+                    fs.rmdirSync(file, { recursive: true });
+                } else {
+                    fs.unlinkSync(file);
+                }
+            }
         } catch (err) {
-            // Ignore errors (for files that may not exist)
+            console.error(`Failed to clean up file: ${file}, error: ${err.message}`);
         }
     });
 }
@@ -21,8 +27,9 @@ function cleanupFiles(...files) {
 
     // Define paths for temporary C# files
     const tmpDir = os.tmpdir();
-    const sourceFile = path.join(tmpDir, `main_${Date.now()}.cs`);
-    const outputDir = path.join(tmpDir, `output_${Date.now()}`);
+    const uniqueId = Date.now();
+    const sourceFile = path.join(tmpDir, `main_${uniqueId}.cs`);
+    const outputDir = path.join(tmpDir, `output_${uniqueId}`);
     const outputFile = path.join(outputDir, "main.dll");
 
     try {
@@ -31,30 +38,26 @@ function cleanupFiles(...files) {
 
         // Compile the C# code using `dotnet` CLI
         fs.mkdirSync(outputDir); // Create the output directory
-        const compileCommand = `dotnet build -o ${outputDir} ${sourceFile}`;
-        execSync(compileCommand);
+        const compileCommand = `dotnet build -o "${outputDir}" "${sourceFile}"`;
+        execSync(compileCommand, { stdio: "inherit" });
 
         // Execute the compiled program
-        const runCommand = `dotnet ${outputFile}`;
-        let output = execSync(runCommand, {
-            input, // Pass input to the C# program
-            encoding: "utf-8", // Ensures we get the output as a string
+        const runCommand = `dotnet "${outputFile}"`;
+        const output = execSync(runCommand, {
+            input,
+            encoding: "utf-8",
         });
-
-        // Clean up temporary files after execution
-        cleanupFiles(sourceFile);
-        fs.rmdirSync(outputDir, { recursive: true });
 
         // Send the output back to the main thread
         parentPort.postMessage({
             output: output || "No output received!",
         });
     } catch (err) {
-        // Clean up files and send server error if anything goes wrong
-        cleanupFiles(sourceFile);
-        fs.rmdirSync(outputDir, { recursive: true });
-        return parentPort.postMessage({
+        parentPort.postMessage({
             error: { fullError: `Server error: ${err.message}` },
         });
+    } finally {
+        // Clean up temporary files and directories
+        cleanupFiles(sourceFile, outputDir);
     }
 })();
