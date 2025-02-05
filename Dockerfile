@@ -1,9 +1,9 @@
-# Use official .NET SDK image with Node.js
-FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build-env
+# Use official Node.js image
+FROM node:18 AS build-env
 WORKDIR /app
 
-# Install Node.js
-RUN apt-get update && apt-get install -y nodejs npm
+# Install Mono (mcs compiler)
+RUN apt-get update && apt-get install -y mono-mcs
 
 # Copy Node.js files and install dependencies
 COPY package.json package-lock.json ./
@@ -11,11 +11,6 @@ RUN npm install
 
 # Copy the rest of the code
 COPY . .
-
-# Pre-create the C# console project (Precompiled)
-RUN dotnet new console -o ConsoleApp --force
-WORKDIR /app/ConsoleApp
-RUN dotnet build -c Release
 
 # Expose the app port
 EXPOSE 3000
