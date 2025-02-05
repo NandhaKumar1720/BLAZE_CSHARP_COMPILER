@@ -5,6 +5,7 @@ const path = require("path");
 
 // Pre-created project directory
 const projectDir = path.join(__dirname, "ConsoleApp");
+const outputDir = path.join(projectDir, "bin/Debug/net6.0");
 
 // Worker logic
 (async () => {
@@ -15,28 +16,22 @@ const projectDir = path.join(__dirname, "ConsoleApp");
         const programFile = path.join(projectDir, "Program.cs");
         fs.writeFileSync(programFile, code);
 
-        // Compile and Run using dotnet run (Debug mode for faster build)
-        let output = "";
-        try {
-            output = execSync(`dotnet run --no-restore --no-build -c Debug`, {
-                cwd: projectDir,
-                input,
-                encoding: "utf-8",
-                timeout: 10000, // 10-second timeout
-            });
-        } catch (error) {
-            return parentPort.postMessage({
-                error: { fullError: `Runtime Error:\n${error.message}` },
-            });
-        }
+        // Compile the project (Debug mode for faster build)
+        execSync(`dotnet build -c Debug -o ${outputDir}`, { cwd: projectDir, encoding: "utf-8" });
 
-        // Send output back to the main thread
+        // Run the compiled DLL directly (faster than dotnet run)
+        const output = execSync(`dotnet ${outputDir}/ConsoleApp.dll`, {
+            input,
+            encoding: "utf-8",
+            timeout: 10000, // 10-second timeout
+        });
+
         parentPort.postMessage({
             output: output || "No output received!",
         });
-    } catch (err) {
-        return parentPort.postMessage({
-            error: { fullError: `Server error: ${err.message}` },
+    } catch (error) {
+        parentPort.postMessage({
+            error: { fullError: `Error:\n${error.message}` },
         });
     }
 })();
