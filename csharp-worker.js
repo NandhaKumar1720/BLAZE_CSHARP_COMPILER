@@ -19,7 +19,7 @@ const outputDir = path.join(projectDir, "bin/Debug/net6.0");
         // Compile the project (Debug mode for faster build)
         execSync(`dotnet build -c Debug -o ${outputDir}`, { cwd: projectDir, encoding: "utf-8" });
 
-        // Run the compiled DLL directly (faster than dotnet run)
+        // Run the compiled DLL directly (corrected command)
         const output = execSync(`dotnet ${outputDir}/ConsoleApp.dll`, {
             input,
             encoding: "utf-8",
