@@ -1,31 +1,22 @@
-# Use the official Node.js image as the base
-FROM node:16
-
-# Install necessary tools and dependencies
-RUN apt-get update && apt-get install -y wget apt-transport-https software-properties-common
-
-# Add Microsoft package signing key
-RUN wget https://packages.microsoft.com/config/debian/11/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
-    && dpkg -i packages-microsoft-prod.deb \
-    && rm packages-microsoft-prod.deb
-
-# Install .NET SDK and build tools
-RUN apt-get update && apt-get install -y dotnet-sdk-6.0 build-essential
-
-# Set the working directory inside the container
+# Use official .NET SDK image with Node.js
+FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build-env
 WORKDIR /app
 
-# Copy package.json and package-lock.json into the container
-COPY package.json package-lock.json ./
+# Install Node.js
+RUN apt-get update && apt-get install -y nodejs npm
 
-# Install Node.js dependencies
+# Copy Node.js files and install dependencies
+COPY package.json package-lock.json ./
 RUN npm install
 
-# Copy the rest of the application code
+# Copy the rest of the code
 COPY . .
 
-# Expose the application port
+# Pre-create the C# console project (cached during build)
+RUN dotnet new console -o ConsoleApp --force
+
+# Expose the app port
 EXPOSE 3000
 
-# Start the server
+# Run the server
 CMD ["node", "server.js"]
