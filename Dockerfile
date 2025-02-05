@@ -12,9 +12,10 @@ RUN npm install
 # Copy the rest of the code
 COPY . .
 
-# Pre-create the C# console project (cached during build)
+# Pre-create the C# console project (Precompiled)
 RUN dotnet new console -o ConsoleApp --force
-
+WORKDIR /app/ConsoleApp
+RUN dotnet build -c Release
 
 # Expose the app port
 EXPOSE 3000
