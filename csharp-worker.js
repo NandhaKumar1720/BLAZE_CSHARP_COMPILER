@@ -3,31 +3,30 @@ const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
-// Paths
-const projectDir = path.join(__dirname, "ConsoleApp");
-const programFile = path.join(projectDir, "Program.cs");
-const outputDir = path.join(projectDir, "bin/Release/net6.0");
+// Define filenames
+const programFile = path.join(__dirname, "Program.cs");
+const exeFile = path.join(__dirname, "Program.exe");
 
 // Worker logic
 (async () => {
     const { code, input } = workerData;
 
     try {
-        // Write the user's code to Program.cs
+        // Write the user's C# code to Program.cs
         fs.writeFileSync(programFile, code);
 
-        // Compile *ONLY* Program.cs (skip full build)
-        execSync(`dotnet build -c Release --no-dependencies --nologo`, { cwd: projectDir, encoding: "utf-8" });
+        // Compile the C# code using Mono (mcs)
+        execSync(`mcs -out:${exeFile} ${programFile}`, { encoding: "utf-8" });
 
-        // Run the compiled DLL directly
-        const output = execSync(`dotnet ${outputDir}/ConsoleApp.dll`, {
+        // Run the compiled executable with input
+        const output = execSync(`mono ${exeFile}`, {
             input,
             encoding: "utf-8",
-            timeout: 5000, // Max execution time
+            timeout: 10000, // 10-second timeout
         });
 
         parentPort.postMessage({
-            output: output.trim() || "No output received!",
+            output: output || "No output received!",
         });
     } catch (error) {
         parentPort.postMessage({
