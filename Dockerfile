@@ -14,6 +14,8 @@ COPY . .
 
 # Pre-create the C# console project (cached during build)
 RUN dotnet new console -o ConsoleApp --force
+RUN dotnet bin/Debug/net6.0/ConsoleApp.dll
+
 
 # Expose the app port
 EXPOSE 3000
