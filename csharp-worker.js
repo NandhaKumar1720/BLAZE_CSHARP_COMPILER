@@ -5,62 +5,63 @@ const fs = require("fs");
 const path = require("path");
 
 // Utility function to clean up temporary files
-function cleanupFiles(...files) {
-    files.forEach((file) => {
-        try {
-            fs.unlinkSync(file);
-        } catch (err) {
-            // Ignore errors (for files that may not exist)
-        }
-    });
+function cleanupFiles(directory) {
+    try {
+        fs.rmSync(directory, { recursive: true, force: true });
+    } catch (err) {
+        // Ignore errors during cleanup
+    }
 }
 
 // Worker logic
 (async () => {
     const { code, input } = workerData;
 
-    // Paths for the temporary C# file
-    const tmpDir = os.tmpdir();
-    const csFile = path.join(tmpDir, "Program.cs");
-    const exeFile = path.join(tmpDir, "Program.dll");
+    // Create a temporary directory for the C# project
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "csharp-compiler-"));
+    const projectDir = path.join(tmpDir, "ConsoleApp");
 
     try {
-        // Write the C# code to the Program.cs file
-        fs.writeFileSync(csFile, code);
+        // Create a new .NET console project
+        execSync(`dotnet new console -o ${projectDir} --force`, { encoding: "utf-8" });
 
-        // Compile the C# code
+        // Write the user's C# code to Program.cs
+        const programFile = path.join(projectDir, "Program.cs");
+        fs.writeFileSync(programFile, code);
+
+        // Build the project
         try {
-            execSync(`dotnet new console -o ${tmpDir} --force && mv ${csFile} ${tmpDir}/Program.cs && cd ${tmpDir} && dotnet build -c Release`, { encoding: "utf-8" });
+            execSync(`dotnet build -c Release -o ${projectDir}/bin`, { cwd: projectDir, encoding: "utf-8" });
         } catch (error) {
-            cleanupFiles(csFile);
+            cleanupFiles(tmpDir);
             return parentPort.postMessage({
                 error: { fullError: `Compilation Error:\n${error.message}` },
             });
         }
 
-        // Execute the compiled C# program
+        // Run the compiled executable
         let output = "";
         try {
-            output = execSync(`dotnet ${exeFile}`, {
-                input, // Pass input to the C# program
+            output = execSync(`dotnet ${projectDir}/bin/ConsoleApp.dll`, {
+                input,
                 encoding: "utf-8",
             });
         } catch (error) {
-            cleanupFiles(csFile, exeFile);
+            cleanupFiles(tmpDir);
             return parentPort.postMessage({
                 error: { fullError: `Runtime Error:\n${error.message}` },
             });
         }
 
         // Clean up temporary files
-        cleanupFiles(csFile, exeFile);
+        cleanupFiles(tmpDir);
 
         // Send the output back to the main thread
         parentPort.postMessage({
             output: output || "No output received!",
         });
     } catch (err) {
-        cleanupFiles(csFile, exeFile);
+        cleanupFiles(tmpDir);
         return parentPort.postMessage({
             error: { fullError: `Server error: ${err.message}` },
         });
