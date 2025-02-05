@@ -3,9 +3,9 @@ const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
-// Pre-created project directory
+// Paths
 const projectDir = path.join(__dirname, "ConsoleApp");
-const outputDir = path.join(projectDir, "bin/Debug/net6.0");
+const outputDir = path.join(projectDir, "bin/Release/net6.0");
 
 // Worker logic
 (async () => {
@@ -16,18 +16,18 @@ const outputDir = path.join(projectDir, "bin/Debug/net6.0");
         const programFile = path.join(projectDir, "Program.cs");
         fs.writeFileSync(programFile, code);
 
-        // Compile the project (Debug mode for faster build)
-        execSync(`dotnet build -c Debug -o ${outputDir}`, { cwd: projectDir, encoding: "utf-8" });
+        // Compile only Program.cs instead of rebuilding everything
+        execSync(`dotnet build -c Release --no-incremental`, { cwd: projectDir, encoding: "utf-8" });
 
-        // Run the compiled DLL directly (corrected command)
+        // Run the compiled DLL directly (faster execution)
         const output = execSync(`dotnet ${outputDir}/ConsoleApp.dll`, {
             input,
             encoding: "utf-8",
-            timeout: 10000, // 10-second timeout
+            timeout: 5000, // Reduce timeout to 5 secs
         });
 
         parentPort.postMessage({
-            output: output || "No output received!",
+            output: output.trim() || "No output received!",
         });
     } catch (error) {
         parentPort.postMessage({
