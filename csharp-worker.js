@@ -5,6 +5,7 @@ const path = require("path");
 
 // Paths
 const projectDir = path.join(__dirname, "ConsoleApp");
+const programFile = path.join(projectDir, "Program.cs");
 const outputDir = path.join(projectDir, "bin/Release/net6.0");
 
 // Worker logic
@@ -13,17 +14,16 @@ const outputDir = path.join(projectDir, "bin/Release/net6.0");
 
     try {
         // Write the user's code to Program.cs
-        const programFile = path.join(projectDir, "Program.cs");
         fs.writeFileSync(programFile, code);
 
-        // Compile only Program.cs instead of rebuilding everything
-        execSync(`dotnet build -c Release --no-incremental`, { cwd: projectDir, encoding: "utf-8" });
+        // Compile *ONLY* Program.cs (skip full build)
+        execSync(`dotnet build -c Release --no-dependencies --nologo`, { cwd: projectDir, encoding: "utf-8" });
 
-        // Run the compiled DLL directly (faster execution)
+        // Run the compiled DLL directly
         const output = execSync(`dotnet ${outputDir}/ConsoleApp.dll`, {
             input,
             encoding: "utf-8",
-            timeout: 5000, // Reduce timeout to 5 secs
+            timeout: 5000, // Max execution time
         });
 
         parentPort.postMessage({
